@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { createClient } from '@supabase/supabase-js';
 import {
   Search,
   Heart,
@@ -7,29 +8,26 @@ import {
   Plus,
   Trash2,
   Edit3,
-  Eye,
   Package,
-  Newspaper,
   HelpCircle,
   Lock,
-  Unlock,
   X,
   ZoomIn,
-  ChevronRight,
-  SlidersHorizontal,
   ArrowUpRight,
   CheckCircle2,
-  BarChart3,
   Settings,
-  Image as ImageIcon,
-  Layers,
-  Sparkles,
-  Menu,
-  MessageSquare
+  Menu
 } from 'lucide-react';
 
 // ============================================================================
-// LOGO GRAPHIQUE SUR MESURE BLACKBOX (SVG & FAVICON)
+// CONNEXION SUPABASE (BASE DE DONNÉES GLOBALE EN DIRECT)
+// ============================================================================
+const SUPABASE_URL = 'https://gqovwfwazwxodypqgtnw.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdxb3Z3Zndhend4b2R5cHFndG53Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ1NjUyNzAsImV4cCI6MjExMDE0MTI3MH0.Y86-6RkPYkf8ZFh4ZYD_ay9B07Re9opNXDmGjPDLwE0';
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ============================================================================
+// LOGO GRAPHIQUE SUR MESURE BLACKBOX
 // ============================================================================
 const BlackboxLogo = ({ size = 'md', showTagline = false }) => {
   const iconDim = size === 'sm' ? 28 : size === 'lg' ? 44 : 34;
@@ -93,116 +91,77 @@ const DiscordIcon = ({ className = 'w-5 h-5' }) => (
   </svg>
 );
 
-// ============================================================================
-// DONNÉES INITIALES
-// ============================================================================
 const CATEGORIES = ['Vêtements', 'Chaussures', 'Accessoires', 'Sacs', 'Bijoux', 'Autres'];
+const DEFAULT_DISCORD_URL = 'https://discord.gg/zxbGNSfxV';
 
-const INITIAL_PRODUCTS = [
-  {
-    id: 'prod-1',
-    name: 'Hoodie Boxy Heavyweight 520GSM — Washed Anthracite',
-    category: 'Vêtements',
-    priceEur: 34.50,
-    priceCny: 265,
-    description: 'Coupe boxy ultra-structurée avec épaules tombantes et coton peigné lourd 520 GSM. Finition délavée vintage à l’acide.',
-    bbdbuyUrl: 'https://bbdbuy.com/product/detail?url=https%3A%2F%2Fitem.taobao.com%2Fitem.htm%3Fid%3D84920194821',
-    promoImages: ['https://images.unsplash.com/photo-1556821840-3a63f95609a7?auto=format&fit=crop&w=900&q=80'],
-    qcImages: ['https://images.unsplash.com/photo-1620799140408-edc6dcb6d633?auto=format&fit=crop&w=900&q=80'],
-    views: 1420,
-    createdAt: '2026-11-10T10:00:00Z'
-  },
-  {
-    id: 'prod-2',
-    name: 'Sneakers Retro Court Low — White / Carbon Suede',
-    category: 'Chaussures',
-    priceEur: 48.00,
-    priceCny: 368,
-    description: 'Silhouette basse inspirée du skate des années 90. Empiècements en cuir pleine fleur et daim brossé carbone.',
-    bbdbuyUrl: 'https://bbdbuy.com/product/detail?url=https%3A%2F%2Fweidian.com%2Fitem.html%3FitemID%3D7291048291',
-    promoImages: ['https://images.unsplash.com/photo-1549298916-b41d501d3772?auto=format&fit=crop&w=900&q=80'],
-    qcImages: ['https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?auto=format&fit=crop&w=900&q=80'],
-    views: 2180,
-    createdAt: '2026-11-08T14:30:00Z'
-  }
-];
-
-const INITIAL_NEWS = [
-  {
-    id: 'news-1',
-    title: 'Guide Débutant : Comment commander via BBDBuy en 3 étapes',
-    category: 'Guide BBDBuy',
-    date: '11 Novembre 2026',
-    image: 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=900&q=80',
-    summary: 'Découvrez comment utiliser les liens vérifiés BLACKBOX pour commander facilement.',
-    content: 'Parcourez le catalogue, inspectez les QC, puis cliquez sur Acheter pour être redirigé vers BBDBuy.'
-  }
-];
-
-const DEFAULT_DISCORD_URL = 'https://discord.gg/blackbox-bbdbuy';
-
-// ============================================================================
-// COMPOSANT PRINCIPAL : APP
-// ============================================================================
 export default function App() {
   const [activeTab, setActiveTab] = useState('home');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  const [products, setProducts] = useState(() => {
-    try {
-      const saved = localStorage.getItem('blackbox_products_v1');
-      return saved ? JSON.parse(saved) : INITIAL_PRODUCTS;
-    } catch {
-      return INITIAL_PRODUCTS;
-    }
-  });
+  const [products, setProducts] = useState([]);
+  const [news, setNews] = useState([]);
+  const [discordUrl, setDiscordUrl] = useState(DEFAULT_DISCORD_URL);
 
-  const [news, setNews] = useState(() => {
-    try {
-      const saved = localStorage.getItem('blackbox_news_v1');
-      return saved ? JSON.parse(saved) : INITIAL_NEWS;
-    } catch {
-      return INITIAL_NEWS;
-    }
-  });
-
+  // Favoris gardés par visiteur en local
   const [favorites, setFavorites] = useState(() => {
     try {
       const saved = localStorage.getItem('blackbox_favorites_v1');
-      return saved ? JSON.parse(saved) : ['prod-1'];
+      return saved ? JSON.parse(saved) : [];
     } catch {
-      return ['prod-1'];
+      return [];
     }
   });
-
-  const [discordUrl, setDiscordUrl] = useState(() => {
-    return localStorage.getItem('blackbox_discord_url_v1') || DEFAULT_DISCORD_URL;
-  });
-
-  const [visitorCount, setVisitorCount] = useState(() => {
-    const saved = parseInt(localStorage.getItem('blackbox_visitors_v1') || '3842', 10);
-    return saved + 1;
-  });
-
-  useEffect(() => {
-    localStorage.setItem('blackbox_products_v1', JSON.stringify(products));
-  }, [products]);
-
-  useEffect(() => {
-    localStorage.setItem('blackbox_news_v1', JSON.stringify(news));
-  }, [news]);
 
   useEffect(() => {
     localStorage.setItem('blackbox_favorites_v1', JSON.stringify(favorites));
   }, [favorites]);
 
-  useEffect(() => {
-    localStorage.setItem('blackbox_discord_url_v1', discordUrl);
-  }, [discordUrl]);
+  // Chargement initial depuis Supabase
+  const fetchAllData = async () => {
+    setLoading(true);
+    try {
+      const [prodRes, newsRes, settingsRes] = await Promise.all([
+        supabase.from('products').select('*').order('created_at', { ascending: false }),
+        supabase.from('news').select('*').order('created_at', { ascending: false }),
+        supabase.from('settings').select('*').eq('key', 'discord_url').maybeSingle()
+      ]);
+
+      if (prodRes.data) {
+        setProducts(
+          prodRes.data.map((p) => ({
+            id: p.id,
+            name: p.name,
+            category: p.category,
+            priceEur: Number(p.price_eur),
+            priceCny: p.price_cny ? Number(p.price_cny) : 0,
+            description: p.description || '',
+            bbdbuyUrl: p.bbdbuy_url,
+            promoImages: p.promo_images || [],
+            qcImages: p.qc_images || [],
+            views: p.views || 0,
+            createdAt: p.created_at
+          }))
+        );
+      }
+
+      if (newsRes.data) {
+        setNews(newsRes.data);
+      }
+
+      if (settingsRes.data?.value) {
+        setDiscordUrl(settingsRes.data.value);
+      }
+    } catch (err) {
+      console.error('Erreur chargement Supabase:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    localStorage.setItem('blackbox_visitors_v1', String(visitorCount));
-  }, [visitorCount]);
+    fetchAllData();
+  }, []);
 
   const [selectedProductId, setSelectedProductId] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -222,9 +181,10 @@ export default function App() {
   const [adminPasswordInput, setAdminPasswordInput] = useState('');
   const [adminLoginError, setAdminLoginError] = useState('');
   const [adminActiveTab, setAdminActiveTab] = useState('products');
+  const [saving, setSaving] = useState(false);
 
   // Modal d'ajout / édition de produit
-  const [editingProduct, setEditingProduct] = useState(null);
+  const [editingProduct, setEditingProduct] = useState(undefined);
   const [productForm, setProductForm] = useState({
     name: '',
     category: 'Vêtements',
@@ -236,13 +196,29 @@ export default function App() {
     qcImagesStr: ''
   });
 
-  const openProductDetail = (productId) => {
+  // Modal d'ajout / édition d'actualité
+  const [editingNews, setEditingNews] = useState(undefined);
+  const [newsForm, setNewsForm] = useState({
+    title: '',
+    category: 'Guide BBDBuy',
+    date: new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }),
+    image: '',
+    summary: '',
+    content: ''
+  });
+
+  const openProductDetail = async (productId) => {
+    const target = products.find((p) => p.id === productId);
+    const nextViews = (target?.views || 0) + 1;
+
     setProducts((prev) =>
-      prev.map((p) => (p.id === productId ? { ...p, views: (p.views || 0) + 1 } : p))
+      prev.map((p) => (p.id === productId ? { ...p, views: nextViews } : p))
     );
     setSelectedProductId(productId);
     setActiveTab('product');
     window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    await supabase.from('products').update({ views: nextViews }).eq('id', productId);
   };
 
   const toggleFavorite = (e, productId) => {
@@ -295,11 +271,113 @@ export default function App() {
   };
 
   // ==========================================================================
-  // RENDU : HEADER & NAVIGATION
+  // CRUD SUPABASE : PRODUITS
   // ==========================================================================
+  const handleSaveProduct = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    const id = editingProduct ? editingProduct.id : `prod-${Date.now()}`;
+    const promoList = productForm.promoImagesStr.split(',').map((s) => s.trim()).filter(Boolean);
+    const qcList = productForm.qcImagesStr.split(',').map((s) => s.trim()).filter(Boolean);
+
+    const dbPayload = {
+      id,
+      name: productForm.name,
+      category: productForm.category,
+      price_eur: parseFloat(productForm.priceEur) || 0,
+      price_cny: parseFloat(productForm.priceCny) || 0,
+      description: productForm.description,
+      bbdbuy_url: productForm.bbdbuyUrl,
+      promo_images: promoList,
+      qc_images: qcList,
+      views: editingProduct ? editingProduct.views : 0
+    };
+
+    const { error } = await supabase.from('products').upsert(dbPayload);
+    setSaving(false);
+
+    if (error) {
+      alert('Erreur Supabase : ' + error.message);
+      return;
+    }
+
+    await fetchAllData();
+    setEditingProduct(undefined);
+    showToast(editingProduct ? 'Produit mis à jour pour tous les visiteurs' : 'Produit publié en direct');
+  };
+
+  const handleDeleteProduct = async (id) => {
+    if (!confirm('Supprimer définitivement ce produit pour tout le monde ?')) return;
+    const { error } = await supabase.from('products').delete().eq('id', id);
+    if (error) {
+      alert('Erreur suppression : ' + error.message);
+      return;
+    }
+    setProducts((prev) => prev.filter((p) => p.id !== id));
+    showToast('Produit supprimé pour tout le monde');
+  };
+
+  // ==========================================================================
+  // CRUD SUPABASE : ACTUALITÉS
+  // ==========================================================================
+  const handleSaveNews = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    const id = editingNews ? editingNews.id : `news-${Date.now()}`;
+
+    const dbPayload = {
+      id,
+      title: newsForm.title,
+      category: newsForm.category,
+      date: newsForm.date,
+      image: newsForm.image,
+      summary: newsForm.summary,
+      content: newsForm.content
+    };
+
+    const { error } = await supabase.from('news').upsert(dbPayload);
+    setSaving(false);
+
+    if (error) {
+      alert('Erreur Supabase : ' + error.message);
+      return;
+    }
+
+    await fetchAllData();
+    setEditingNews(undefined);
+    showToast(editingNews ? 'Actualité mise à jour en direct' : 'Actualité publiée pour tout le monde');
+  };
+
+  const handleDeleteNews = async (id) => {
+    if (!confirm('Supprimer définitivement cette actualité ?')) return;
+    const { error } = await supabase.from('news').delete().eq('id', id);
+    if (error) {
+      alert('Erreur suppression : ' + error.message);
+      return;
+    }
+    setNews((prev) => prev.filter((n) => n.id !== id));
+    showToast('Actualité supprimée');
+  };
+
+  // ==========================================================================
+  // CRUD SUPABASE : PARAMÈTRES (DISCORD)
+  // ==========================================================================
+  const handleSaveDiscord = async () => {
+    setSaving(true);
+    const { error } = await supabase
+      .from('settings')
+      .upsert({ key: 'discord_url', value: discordUrl });
+    setSaving(false);
+
+    if (error) {
+      alert('Erreur sauvegarde Discord : ' + error.message);
+      return;
+    }
+    showToast('Lien Discord mis à jour pour tout le monde');
+  };
+
   return (
     <div className="min-h-screen bg-[#F4F4F6] text-[#111111] flex flex-col font-sans">
-      {/* Toast Notification */}
       {toast && (
         <div className="fixed bottom-6 right-6 z-50 bg-[#111111] text-white px-5 py-3 rounded-lg shadow-xl text-sm font-bold flex items-center gap-2 animate-bounce">
           <CheckCircle2 className="w-4 h-4 text-emerald-400" />
@@ -307,7 +385,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Lightbox Zoom Image */}
       {lightboxImage && (
         <div
           onClick={() => setLightboxImage(null)}
@@ -339,7 +416,6 @@ export default function App() {
             <BlackboxLogo size="md" />
           </div>
 
-          {/* Navigation Desktop */}
           <nav className="hidden md:flex items-center gap-8">
             <button
               onClick={() => navigateTo('home')}
@@ -376,7 +452,6 @@ export default function App() {
             </a>
           </nav>
 
-          {/* Actions Droite */}
           <div className="flex items-center gap-3">
             <button
               onClick={() => navigateTo('favorites')}
@@ -420,7 +495,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* Menu mobile */}
         {mobileMenuOpen && (
           <div className="md:hidden bg-white border-t border-[#E2E2E6] px-4 py-4 space-y-3">
             <button
@@ -455,759 +529,906 @@ export default function App() {
 
       {/* CONTENU PRINCIPAL */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* ================= ACCUEIL ================= */}
-        {activeTab === 'home' && (
-          <div className="space-y-14 pb-16">
-            <section className="bg-white border border-[#E2E2E6] rounded-2xl p-6 sm:p-12 shadow-sm">
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
-                <div className="lg:col-span-7 space-y-6">
-                  <div className="inline-flex items-center gap-2 bg-[#F4F4F6] border border-[#E2E2E6] px-3 py-1.5 rounded-full">
-                    <span className="w-2 h-2 rounded-full bg-[#111111] animate-pulse" />
-                    <span className="text-xs font-extrabold uppercase tracking-widest text-[#111111]">
-                      Catalogue Indépendant • Redirection BBDBuy
-                    </span>
+        {loading && activeTab !== 'admin' ? (
+          <div className="py-24 text-center text-xs font-bold uppercase tracking-widest text-[#666666]">
+            Chargement du catalogue BLACKBOX...
+          </div>
+        ) : (
+          <>
+            {/* ================= ACCUEIL ================= */}
+            {activeTab === 'home' && (
+              <div className="space-y-14 pb-16">
+                <section className="bg-white border border-[#E2E2E6] rounded-2xl p-6 sm:p-12 shadow-sm">
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
+                    <div className="lg:col-span-7 space-y-6">
+                      <div className="inline-flex items-center gap-2 bg-[#F4F4F6] border border-[#E2E2E6] px-3 py-1.5 rounded-full">
+                        <span className="w-2 h-2 rounded-full bg-[#111111] animate-pulse" />
+                        <span className="text-xs font-extrabold uppercase tracking-widest text-[#111111]">
+                          Catalogue Indépendant • Redirection BBDBuy
+                        </span>
+                      </div>
+
+                      <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight text-[#111111] uppercase leading-[1.02]">
+                        DISCOVER PRODUCTS.
+                        <br />
+                        <span className="text-[#666666]">CHECK QUALITY.</span>
+                        <br />
+                        SHOP SMARTER.
+                      </h1>
+
+                      <p className="text-base sm:text-lg text-[#555555] max-w-2xl leading-relaxed">
+                        Plus besoin de chercher pendant des heures sur Taobao, Weidian ou 1688.{' '}
+                        <strong className="text-[#111111]">BLACKBOX</strong> sélectionne les meilleures
+                        pièces streetwear, publie leurs véritables photos d’entrepôt{' '}
+                        <strong className="text-[#111111]">Quality Checks (QC)</strong> et vous redirige
+                        en un clic vers <strong className="text-[#111111]">BBDBuy</strong>.
+                      </p>
+
+                      <form
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          navigateTo('catalog');
+                        }}
+                        className="flex flex-col sm:flex-row gap-2.5 max-w-xl"
+                      >
+                        <div className="relative flex-1">
+                          <Search className="w-4 h-4 text-[#666666] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                          <input
+                            type="text"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            placeholder="Rechercher un hoodie, sneakers, sac..."
+                            className="w-full pl-10 pr-4 py-3.5 bg-[#F4F4F6] border border-[#E2E2E6] rounded-lg text-sm text-[#111111] focus:outline-none focus:border-[#111111]"
+                          />
+                        </div>
+                        <button
+                          type="submit"
+                          className="px-6 py-3.5 bg-[#111111] text-white font-bold text-sm uppercase tracking-wider rounded-lg hover:bg-[#2a2a2a]"
+                        >
+                          Explorer
+                        </button>
+                      </form>
+                    </div>
+
+                    <div className="lg:col-span-5 bg-[#F4F4F6] border border-[#E2E2E6] rounded-xl p-5 space-y-4">
+                      <div className="flex items-center justify-between border-b border-[#E2E2E6] pb-3">
+                        <div className="flex items-center gap-2">
+                          <ShieldCheck className="w-5 h-5 text-[#111111]" />
+                          <span className="text-xs font-black uppercase tracking-wider text-[#111111]">
+                            Transparence Warehouse QC
+                          </span>
+                        </div>
+                        <span className="text-[11px] font-bold bg-white px-2.5 py-1 rounded border border-[#E2E2E6]">
+                          {products.length} Références
+                        </span>
+                      </div>
+
+                      {popularProducts.length === 0 ? (
+                        <p className="text-xs text-[#666666] py-8 text-center">
+                          Aucun produit publié pour le moment.
+                        </p>
+                      ) : (
+                        <div className="grid grid-cols-2 gap-3">
+                          {popularProducts.slice(0, 2).map((item) => (
+                            <div
+                              key={item.id}
+                              onClick={() => openProductDetail(item.id)}
+                              className="bg-white rounded-lg border border-[#E2E2E6] overflow-hidden cursor-pointer group"
+                            >
+                              <div className="aspect-square overflow-hidden relative bg-[#EAEAEF]">
+                                {item.promoImages?.[0] && (
+                                  <img
+                                    src={item.promoImages[0]}
+                                    alt={item.name}
+                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                  />
+                                )}
+                              </div>
+                              <div className="p-2.5">
+                                <p className="text-xs font-bold text-[#111111] truncate">{item.name}</p>
+                                <p className="text-xs font-extrabold text-[#555555] mt-0.5">
+                                  ~{item.priceEur.toFixed(2)} €
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </section>
+              </div>
+            )}
+
+            {/* ================= CATALOGUE ================= */}
+            {activeTab === 'catalog' && (
+              <div className="space-y-8 pb-16">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-2xl border border-[#E2E2E6]">
+                  <div>
+                    <h1 className="text-2xl font-black uppercase tracking-tight text-[#111111]">
+                      Catalogue Streetwear
+                    </h1>
+                    <p className="text-xs text-[#666666] mt-1">
+                      {filteredProducts.length} articles disponibles • Redirection BBDBuy
+                    </p>
                   </div>
 
-                  <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight text-[#111111] uppercase leading-[1.02]">
-                    DISCOVER PRODUCTS.
-                    <br />
-                    <span className="text-[#666666]">CHECK QUALITY.</span>
-                    <br />
-                    SHOP SMARTER.
-                  </h1>
-
-                  <p className="text-base sm:text-lg text-[#555555] max-w-2xl leading-relaxed">
-                    Plus besoin de chercher pendant des heures sur Taobao, Weidian ou 1688.{' '}
-                    <strong className="text-[#111111]">BLACKBOX</strong> sélectionne les meilleures
-                    pièces streetwear, publie leurs véritables photos d’entrepôt{' '}
-                    <strong className="text-[#111111]">Quality Checks (QC)</strong> et vous redirige
-                    en un clic vers <strong className="text-[#111111]">BBDBuy</strong>.
-                  </p>
-
-                  <form
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      navigateTo('catalog');
-                    }}
-                    className="flex flex-col sm:flex-row gap-2.5 max-w-xl"
-                  >
-                    <div className="relative flex-1">
-                      <Search className="w-4 h-4 text-[#666666] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+                    <div className="relative flex-1 md:w-64">
+                      <Search className="w-4 h-4 text-[#666666] absolute left-3 top-1/2 -translate-y-1/2" />
                       <input
                         type="text"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="Rechercher un hoodie, sneakers, sac..."
-                        className="w-full pl-10 pr-4 py-3.5 bg-[#F4F4F6] border border-[#E2E2E6] rounded-lg text-sm text-[#111111] focus:outline-none focus:border-[#111111]"
+                        placeholder="Filtrer par nom..."
+                        className="w-full pl-9 pr-4 py-2 bg-[#F4F4F6] border border-[#E2E2E6] rounded-lg text-xs"
                       />
                     </div>
-                    <button
-                      type="submit"
-                      className="px-6 py-3.5 bg-[#111111] text-white font-bold text-sm uppercase tracking-wider rounded-lg hover:bg-[#2a2a2a]"
+                    <select
+                      value={sortBy}
+                      onChange={(e) => setSortBy(e.target.value)}
+                      className="bg-[#F4F4F6] border border-[#E2E2E6] px-3 py-2 rounded-lg text-xs font-bold"
                     >
-                      Explorer
-                    </button>
-                  </form>
-                </div>
-
-                <div className="lg:col-span-5 bg-[#F4F4F6] border border-[#E2E2E6] rounded-xl p-5 space-y-4">
-                  <div className="flex items-center justify-between border-b border-[#E2E2E6] pb-3">
-                    <div className="flex items-center gap-2">
-                      <ShieldCheck className="w-5 h-5 text-[#111111]" />
-                      <span className="text-xs font-black uppercase tracking-wider text-[#111111]">
-                        Transparence Warehouse QC
-                      </span>
-                    </div>
-                    <span className="text-[11px] font-bold bg-white px-2.5 py-1 rounded border border-[#E2E2E6]">
-                      {products.length} Références
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    {popularProducts.slice(0, 2).map((item) => (
-                      <div
-                        key={item.id}
-                        onClick={() => openProductDetail(item.id)}
-                        className="bg-white rounded-lg border border-[#E2E2E6] overflow-hidden cursor-pointer group"
-                      >
-                        <div className="aspect-square overflow-hidden relative">
-                          <img
-                            src={item.promoImages[0]}
-                            alt={item.name}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                          />
-                        </div>
-                        <div className="p-2.5">
-                          <p className="text-xs font-bold text-[#111111] truncate">{item.name}</p>
-                          <p className="text-xs font-extrabold text-[#555555] mt-0.5">
-                            ~{item.priceEur.toFixed(2)} €
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </section>
-          </div>
-        )}
-
-        {/* ================= CATALOGUE ================= */}
-        {activeTab === 'catalog' && (
-          <div className="space-y-8 pb-16">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-2xl border border-[#E2E2E6]">
-              <div>
-                <h1 className="text-2xl font-black uppercase tracking-tight text-[#111111]">
-                  Catalogue Streetwear
-                </h1>
-                <p className="text-xs text-[#666666] mt-1">
-                  {filteredProducts.length} articles disponibles • Redirection BBDBuy
-                </p>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-                <div className="relative flex-1 md:w-64">
-                  <Search className="w-4 h-4 text-[#666666] absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Filtrer par nom..."
-                    className="w-full pl-9 pr-4 py-2 bg-[#F4F4F6] border border-[#E2E2E6] rounded-lg text-xs"
-                  />
-                </div>
-                <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value)}
-                  className="bg-[#F4F4F6] border border-[#E2E2E6] px-3 py-2 rounded-lg text-xs font-bold"
-                >
-                  <option value="newest">Nouveautés</option>
-                  <option value="popular">Popularité</option>
-                  <option value="price-asc">Prix croissant</option>
-                  <option value="price-desc">Prix décroissant</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Filtres Catégories */}
-            <div className="flex flex-wrap gap-2">
-              {['Tous', ...CATEGORIES].map((cat) => (
-                <button
-                  key={cat}
-                  onClick={() => setSelectedCategory(cat)}
-                  className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors border ${
-                    selectedCategory === cat
-                      ? 'bg-[#111111] text-white border-[#111111]'
-                      : 'bg-white text-[#111111] border-[#E2E2E6] hover:border-[#111111]'
-                  }`}
-                >
-                  {cat}
-                </button>
-              ))}
-            </div>
-
-            {/* Grille Produits */}
-            {filteredProducts.length === 0 ? (
-              <div className="bg-white border border-[#E2E2E6] rounded-2xl p-12 text-center space-y-4">
-                <Package className="w-12 h-12 text-[#666666] mx-auto" />
-                <h3 className="text-lg font-bold">Aucun produit trouvé</h3>
-                <p className="text-xs text-[#666666]">Essayez de modifier vos filtres ou votre recherche.</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                {filteredProducts.map((product) => {
-                  const isFav = favorites.includes(product.id);
-                  const qcCount = product.qcImages ? product.qcImages.length : 0;
-                  return (
-                    <div
-                      key={product.id}
-                      onClick={() => openProductDetail(product.id)}
-                      className="group bg-white border border-[#E2E2E6] rounded-lg overflow-hidden cursor-pointer transition-all duration-300 hover:-translate-y-1 hover:shadow-lg flex flex-col justify-between"
-                    >
-                      <div>
-                        <div className="relative aspect-[4/5] bg-[#EAEAEF] overflow-hidden">
-                          <img
-                            src={product.promoImages?.[0]}
-                            alt={product.name}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                          />
-                          <div className="absolute top-3 left-3 flex gap-1.5">
-                            <span className="bg-white/95 text-[#111111] text-[11px] font-bold uppercase px-2 py-1 rounded">
-                              {product.category}
-                            </span>
-                            {qcCount > 0 && (
-                              <span className="bg-[#111111] text-white text-[11px] font-bold uppercase px-2 py-1 rounded flex items-center gap-1">
-                                <ShieldCheck className="w-3 h-3 text-emerald-400" /> {qcCount} QC
-                              </span>
-                            )}
-                          </div>
-                          <button
-                            onClick={(e) => toggleFavorite(e, product.id)}
-                            className={`absolute top-3 right-3 w-9 h-9 rounded-full flex items-center justify-center border ${
-                              isFav ? 'bg-[#111111] text-white border-[#111111]' : 'bg-white text-[#111111] border-[#E2E2E6]'
-                            }`}
-                          >
-                            <Heart className={`w-4 h-4 ${isFav ? 'fill-current' : ''}`} />
-                          </button>
-                        </div>
-                        <div className="p-4">
-                          <h3 className="font-bold text-[#111111] text-sm line-clamp-2 group-hover:underline">
-                            {product.name}
-                          </h3>
-                        </div>
-                      </div>
-                      <div className="px-4 pb-4 pt-1 flex items-center justify-between border-t border-[#F4F4F6]">
-                        <div>
-                          <span className="text-[11px] uppercase text-[#666666] block">Prix indicatif</span>
-                          <span className="text-base font-black text-[#111111]">
-                            ~{Number(product.priceEur).toFixed(2)} €
-                          </span>
-                        </div>
-                        <span className="w-8 h-8 rounded-md bg-[#F4F4F6] group-hover:bg-[#111111] group-hover:text-white flex items-center justify-center">
-                          <ArrowUpRight className="w-4 h-4" />
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ================= FICHE PRODUIT & QC ================= */}
-        {activeTab === 'product' && activeProduct && (
-          <div className="space-y-12 pb-16">
-            <button
-              onClick={() => navigateTo('catalog')}
-              className="text-xs font-bold uppercase tracking-widest text-[#666666] hover:text-[#111111] flex items-center gap-1.5"
-            >
-              ← Retour au catalogue
-            </button>
-
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 bg-white border border-[#E2E2E6] rounded-2xl p-6 sm:p-10">
-              <div className="lg:col-span-6 space-y-4">
-                <div className="aspect-square bg-[#EAEAEF] rounded-xl overflow-hidden border border-[#E2E2E6]">
-                  <img
-                    src={activeProduct.promoImages?.[0]}
-                    alt={activeProduct.name}
-                    className="w-full h-full object-cover cursor-zoom-in"
-                    onClick={() => setLightboxImage(activeProduct.promoImages[0])}
-                  />
-                </div>
-              </div>
-
-              <div className="lg:col-span-6 space-y-6">
-                <div className="flex items-center gap-2">
-                  <span className="bg-[#111111] text-white text-xs font-bold uppercase px-3 py-1 rounded">
-                    {activeProduct.category}
-                  </span>
-                  <span className="text-xs text-[#666666] font-medium">
-                    {activeProduct.views || 0} vues
-                  </span>
-                </div>
-
-                <h1 className="text-2xl sm:text-3xl font-black uppercase text-[#111111]">
-                  {activeProduct.name}
-                </h1>
-
-                <div className="bg-[#F4F4F6] p-4 rounded-xl border border-[#E2E2E6]">
-                  <span className="text-xs uppercase text-[#666666] block">Prix indicatif</span>
-                  <div className="flex items-baseline gap-3">
-                    <span className="text-3xl font-black text-[#111111]">
-                      ~{Number(activeProduct.priceEur).toFixed(2)} €
-                    </span>
-                    {activeProduct.priceCny && (
-                      <span className="text-sm font-bold text-[#666666]">
-                        (¥{activeProduct.priceCny})
-                      </span>
-                    )}
+                      <option value="newest">Nouveautés</option>
+                      <option value="popular">Popularité</option>
+                      <option value="price-asc">Prix croissant</option>
+                      <option value="price-desc">Prix décroissant</option>
+                    </select>
                   </div>
                 </div>
 
-                <p className="text-sm text-[#555555] leading-relaxed">
-                  {activeProduct.description}
-                </p>
-
-                <div className="pt-4 space-y-3">
-                  <a
-                    href={activeProduct.bbdbuyUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full py-4 bg-[#111111] text-white font-black text-sm uppercase tracking-widest rounded-xl hover:bg-[#2a2a2a] transition-colors flex items-center justify-center gap-2 shadow-lg"
-                  >
-                    Acheter maintenant sur BBDBuy
-                    <ExternalLink className="w-4 h-4" />
-                  </a>
-                </div>
-              </div>
-            </div>
-
-            {/* SECTION QUALITY CHECKS (QC) */}
-            <div className="bg-white border border-[#E2E2E6] rounded-2xl p-6 sm:p-10 space-y-6">
-              <div className="flex items-center justify-between border-b border-[#E2E2E6] pb-4">
-                <div className="flex items-center gap-3">
-                  <ShieldCheck className="w-6 h-6 text-emerald-600" />
-                  <div>
-                    <h2 className="text-lg font-black uppercase tracking-tight text-[#111111]">
-                      Quality Checks (QC)
-                    </h2>
-                    <p className="text-xs text-[#666666]">
-                      Photos réelles prises par l’entrepôt de l’agent (Vérifiées et certifiées)
-                    </p>
-                  </div>
-                </div>
-                <span className="bg-[#F4F4F6] px-3 py-1 rounded text-xs font-bold">
-                  {activeProduct.qcImages?.length || 0} Photos QC
-                </span>
-              </div>
-
-              {(!activeProduct.qcImages || activeProduct.qcImages.length === 0) ? (
-                <p className="text-xs text-[#666666] italic py-4">Aucune photo QC ajoutée pour le moment.</p>
-              ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                  {activeProduct.qcImages.map((img, idx) => (
-                    <div
-                      key={idx}
-                      onClick={() => setLightboxImage(img)}
-                      className="group relative aspect-square bg-[#EAEAEF] rounded-xl overflow-hidden border border-[#E2E2E6] cursor-zoom-in"
-                    >
-                      <img src={img} alt={`QC ${idx + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
-                        <ZoomIn className="w-6 h-6" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* ================= ACTUALITÉS ================= */}
-        {activeTab === 'news' && (
-          <div className="space-y-8 pb-16">
-            <div className="bg-white p-6 rounded-2xl border border-[#E2E2E6]">
-              <h1 className="text-2xl font-black uppercase tracking-tight text-[#111111]">
-                Actualités & Guides
-              </h1>
-              <p className="text-xs text-[#666666] mt-1">
-                Conseils pour débutants, informations sur BBDBuy et livraisons.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {news.map((item) => (
-                <div
-                  key={item.id}
-                  onClick={() => setSelectedNewsArticle(item)}
-                  className="bg-white border border-[#E2E2E6] rounded-xl overflow-hidden cursor-pointer group flex flex-col justify-between hover:shadow-md transition-shadow"
-                >
-                  <div>
-                    {item.image && (
-                      <div className="aspect-video bg-[#EAEAEF] overflow-hidden">
-                        <img src={item.image} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                      </div>
-                    )}
-                    <div className="p-5 space-y-2">
-                      <span className="text-[11px] font-bold bg-[#F4F4F6] px-2.5 py-1 rounded uppercase">
-                        {item.category}
-                      </span>
-                      <h3 className="font-bold text-[#111111] text-base group-hover:underline">
-                        {item.title}
-                      </h3>
-                      <p className="text-xs text-[#555555] line-clamp-2">
-                        {item.summary}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="px-5 pb-5 pt-2 border-t border-[#F4F4F6] text-[11px] text-[#666666] font-medium">
-                    {item.date}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {selectedNewsArticle && (
-              <div
-                onClick={() => setSelectedNewsArticle(null)}
-                className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
-              >
-                <div
-                  onClick={(e) => e.stopPropagation()}
-                  className="bg-white max-w-2xl w-full max-h-[90vh] overflow-y-auto rounded-2xl p-6 sm:p-8 space-y-4 relative"
-                >
-                  <button
-                    onClick={() => setSelectedNewsArticle(null)}
-                    className="absolute top-4 right-4 p-2 rounded-full bg-[#F4F4F6]"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                  <span className="text-xs font-bold bg-[#111111] text-white px-3 py-1 rounded">
-                    {selectedNewsArticle.category}
-                  </span>
-                  <h2 className="text-xl font-black uppercase text-[#111111]">
-                    {selectedNewsArticle.title}
-                  </h2>
-                  <p className="text-xs text-[#666666]">{selectedNewsArticle.date}</p>
-                  <div className="text-sm text-[#333333] whitespace-pre-line leading-relaxed pt-2">
-                    {selectedNewsArticle.content}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ================= FAVORIS ================= */}
-        {activeTab === 'favorites' && (
-          <div className="space-y-8 pb-16">
-            <div className="bg-white p-6 rounded-2xl border border-[#E2E2E6]">
-              <h1 className="text-2xl font-black uppercase tracking-tight text-[#111111]">
-                Mes Favoris
-              </h1>
-              <p className="text-xs text-[#666666] mt-1">
-                {favorites.length} articles sauvegardés
-              </p>
-            </div>
-
-            {favorites.length === 0 ? (
-              <div className="bg-white border border-[#E2E2E6] rounded-2xl p-12 text-center space-y-4">
-                <Heart className="w-12 h-12 text-[#666666] mx-auto" />
-                <h3 className="text-lg font-bold">Aucun favori pour l'instant</h3>
-                <p className="text-xs text-[#666666]">Cliquez sur le cœur d'un produit pour l'ajouter ici.</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                {products
-                  .filter((p) => favorites.includes(p.id))
-                  .map((product) => (
-                    <div
-                      key={product.id}
-                      onClick={() => openProductDetail(product.id)}
-                      className="group bg-white border border-[#E2E2E6] rounded-lg overflow-hidden cursor-pointer hover:shadow-lg flex flex-col justify-between"
-                    >
-                      <div>
-                        <div className="relative aspect-[4/5] bg-[#EAEAEF]">
-                          <img src={product.promoImages?.[0]} alt={product.name} className="w-full h-full object-cover" />
-                          <button
-                            onClick={(e) => toggleFavorite(e, product.id)}
-                            className="absolute top-3 right-3 w-9 h-9 rounded-full bg-[#111111] text-white flex items-center justify-center"
-                          >
-                            <Heart className="w-4 h-4 fill-current" />
-                          </button>
-                        </div>
-                        <div className="p-4">
-                          <h3 className="font-bold text-sm line-clamp-2">{product.name}</h3>
-                        </div>
-                      </div>
-                      <div className="px-4 pb-4 pt-1 flex items-center justify-between border-t border-[#F4F4F6]">
-                        <span className="text-base font-black">~{Number(product.priceEur).toFixed(2)} €</span>
-                        <ArrowUpRight className="w-4 h-4" />
-                      </div>
-                    </div>
-                  ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ================= ESPACE ADMINISTRATEUR ================= */}
-        {activeTab === 'admin' && (
-          <div className="space-y-8 pb-16">
-            {!isAdminAuthenticated ? (
-              <div className="max-w-md mx-auto bg-white border border-[#E2E2E6] rounded-2xl p-8 space-y-6 shadow-sm">
-                <div className="text-center space-y-2">
-                  <div className="w-12 h-12 bg-[#111111] text-white rounded-xl flex items-center justify-center mx-auto">
-                    <Lock className="w-6 h-6" />
-                  </div>
-                  <h1 className="text-xl font-black uppercase">Administration BLACKBOX</h1>
-                  <p className="text-xs text-[#666666]">Entrez votre mot de passe administrateur</p>
-                </div>
-
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    if (adminPasswordInput === 'Goundo77@') {
-                      setIsAdminAuthenticated(true);
-                      setAdminLoginError('');
-                      showToast('Connexion administrateur réussie');
-                    } else {
-                      setAdminLoginError('Mot de passe incorrect (par défaut: admin123)');
-                    }
-                  }}
-                  className="space-y-4"
-                >
-                  <div>
-                    <input
-                      type="password"
-                      value={adminPasswordInput}
-                      onChange={(e) => setAdminPasswordInput(e.target.value)}
-                      placeholder="Mot de passe (admin123)"
-                      autoFocus
-                      className="w-full px-4 py-3 bg-[#F4F4F6] border border-[#E2E2E6] rounded-lg text-sm focus:outline-none focus:border-[#111111]"
-                    />
-                    {adminLoginError && (
-                      <p className="text-xs text-red-600 mt-1">{adminLoginError}</p>
-                    )}
-                  </div>
-                  <button
-                    type="submit"
-                    className="w-full py-3 bg-[#111111] text-white font-bold text-xs uppercase tracking-widest rounded-lg hover:bg-[#2a2a2a]"
-                  >
-                    Se connecter
-                  </button>
-                </form>
-              </div>
-            ) : (
-              <div className="space-y-8">
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-2xl border border-[#E2E2E6]">
-                  <div>
-                    <h1 className="text-2xl font-black uppercase">Tableau de Bord Admin</h1>
-                    <p className="text-xs text-[#666666]">Gestion complète des produits, QC et paramètres</p>
-                  </div>
-                  <button
-                    onClick={() => setIsAdminAuthenticated(false)}
-                    className="px-4 py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg text-xs font-bold uppercase"
-                  >
-                    Déconnexion
-                  </button>
-                </div>
-
-                {/* Onglets Admin */}
                 <div className="flex flex-wrap gap-2">
-                  <button
-                    onClick={() => setAdminActiveTab('products')}
-                    className={`px-4 py-2 rounded-lg text-xs font-bold uppercase ${
-                      adminActiveTab === 'products' ? 'bg-[#111111] text-white' : 'bg-white border border-[#E2E2E6]'
-                    }`}
-                  >
-                    Produits ({products.length})
-                  </button>
-                  <button
-                    onClick={() => setAdminActiveTab('settings')}
-                    className={`px-4 py-2 rounded-lg text-xs font-bold uppercase ${
-                      adminActiveTab === 'settings' ? 'bg-[#111111] text-white' : 'bg-white border border-[#E2E2E6]'
-                    }`}
-                  >
-                    Paramètres & Discord
-                  </button>
+                  {['Tous', ...CATEGORIES].map((cat) => (
+                    <button
+                      key={cat}
+                      onClick={() => setSelectedCategory(cat)}
+                      className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors border ${
+                        selectedCategory === cat
+                          ? 'bg-[#111111] text-white border-[#111111]'
+                          : 'bg-white text-[#111111] border-[#E2E2E6] hover:border-[#111111]'
+                      }`}
+                    >
+                      {cat}
+                    </button>
+                  ))}
                 </div>
 
-                {/* Gestion Produits */}
-                {adminActiveTab === 'products' && (
-                  <div className="bg-white border border-[#E2E2E6] rounded-2xl p-6 space-y-6">
-                    <div className="flex justify-between items-center">
-                      <h3 className="font-black uppercase text-sm">Liste des Produits</h3>
-                      <button
-                        onClick={() => {
-                          setEditingProduct(null);
-                          setProductForm({
-                            name: '',
-                            category: 'Vêtements',
-                            priceEur: '',
-                            priceCny: '',
-                            description: '',
-                            bbdbuyUrl: '',
-                            promoImagesStr: '',
-                            qcImagesStr: ''
-                          });
-                        }}
-                        className="px-4 py-2 bg-[#111111] text-white rounded-lg text-xs font-bold uppercase flex items-center gap-1.5"
-                      >
-                        <Plus className="w-4 h-4" /> Ajouter un produit
-                      </button>
-                    </div>
-
-                    {/* Formulaire Ajout / Édition */}
-                    {(editingProduct !== undefined) && (
-                      <form
-                        onSubmit={(e) => {
-                          e.preventDefault();
-                          const newProd = {
-                            id: editingProduct ? editingProduct.id : `prod-${Date.now()}`,
-                            name: productForm.name,
-                            category: productForm.category,
-                            priceEur: parseFloat(productForm.priceEur) || 0,
-                            priceCny: parseFloat(productForm.priceCny) || 0,
-                            description: productForm.description,
-                            bbdbuyUrl: productForm.bbdbuyUrl,
-                            promoImages: productForm.promoImagesStr.split(',').map(s => s.trim()).filter(Boolean),
-                            qcImages: productForm.qcImagesStr.split(',').map(s => s.trim()).filter(Boolean),
-                            views: editingProduct ? editingProduct.views : 0,
-                            createdAt: editingProduct ? editingProduct.createdAt : new Date().toISOString()
-                          };
-
-                          if (editingProduct) {
-                            setProducts(products.map(p => p.id === editingProduct.id ? newProd : p));
-                            showToast('Produit mis à jour avec succès');
-                          } else {
-                            setProducts([newProd, ...products]);
-                            showToast('Produit ajouté avec succès');
-                          }
-                          setEditingProduct(undefined);
-                        }}
-                        className="bg-[#F4F4F6] p-6 rounded-xl border border-[#E2E2E6] space-y-4"
-                      >
-                        <h4 className="font-bold text-xs uppercase text-[#111111]">
-                          {editingProduct ? 'Modifier le produit' : 'Nouveau produit'}
-                        </h4>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <input
-                            type="text"
-                            placeholder="Nom du produit"
-                            value={productForm.name}
-                            onChange={(e) => setProductForm({ ...productForm, name: e.target.value })}
-                            required
-                            className="w-full px-3 py-2 bg-white border border-[#E2E2E6] rounded-lg text-xs"
-                          />
-                          <select
-                            value={productForm.category}
-                            onChange={(e) => setProductForm({ ...productForm, category: e.target.value })}
-                            className="w-full px-3 py-2 bg-white border border-[#E2E2E6] rounded-lg text-xs"
-                          >
-                            {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                          </select>
-                          <input
-                            type="number"
-                            step="0.01"
-                            placeholder="Prix EUR (~34.50)"
-                            value={productForm.priceEur}
-                            onChange={(e) => setProductForm({ ...productForm, priceEur: e.target.value })}
-                            required
-                            className="w-full px-3 py-2 bg-white border border-[#E2E2E6] rounded-lg text-xs"
-                          />
-                          <input
-                            type="number"
-                            placeholder="Prix CNY (¥265)"
-                            value={productForm.priceCny}
-                            onChange={(e) => setProductForm({ ...productForm, priceCny: e.target.value })}
-                            className="w-full px-3 py-2 bg-white border border-[#E2E2E6] rounded-lg text-xs"
-                          />
-                        </div>
-                        <textarea
-                          placeholder="Description détaillée"
-                          value={productForm.description}
-                          onChange={(e) => setProductForm({ ...productForm, description: e.target.value })}
-                          rows={3}
-                          className="w-full px-3 py-2 bg-white border border-[#E2E2E6] rounded-lg text-xs"
-                        />
-                        <input
-                          type="url"
-                          placeholder="Lien BBDBuy"
-                          value={productForm.bbdbuyUrl}
-                          onChange={(e) => setProductForm({ ...productForm, bbdbuyUrl: e.target.value })}
-                          required
-                          className="w-full px-3 py-2 bg-white border border-[#E2E2E6] rounded-lg text-xs"
-                        />
-                        <input
-                          type="text"
-                          placeholder="URLs photos Promo (séparées par des virgules)"
-                          value={productForm.promoImagesStr}
-                          onChange={(e) => setProductForm({ ...productForm, promoImagesStr: e.target.value })}
-                          className="w-full px-3 py-2 bg-white border border-[#E2E2E6] rounded-lg text-xs"
-                        />
-                        <input
-                          type="text"
-                          placeholder="URLs photos QC (séparées par des virgules)"
-                          value={productForm.qcImagesStr}
-                          onChange={(e) => setProductForm({ ...productForm, qcImagesStr: e.target.value })}
-                          className="w-full px-3 py-2 bg-white border border-[#E2E2E6] rounded-lg text-xs"
-                        />
-                        <div className="flex gap-2">
-                          <button
-                            type="submit"
-                            className="px-5 py-2.5 bg-[#111111] text-white rounded-lg text-xs font-bold uppercase"
-                          >
-                            Enregistrer
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setEditingProduct(undefined)}
-                            className="px-5 py-2.5 bg-white border border-[#E2E2E6] rounded-lg text-xs font-bold uppercase"
-                          >
-                            Annuler
-                          </button>
-                        </div>
-                      </form>
-                    )}
-
-                    {/* Tableau produits */}
-                    <div className="divide-y divide-[#E2E2E6]">
-                      {products.map((p) => (
-                        <div key={p.id} className="py-3 flex items-center justify-between gap-4">
-                          <div className="flex items-center gap-3">
-                            <img src={p.promoImages?.[0]} alt="" className="w-12 h-12 object-cover rounded-lg border" />
-                            <div>
-                              <p className="font-bold text-xs line-clamp-1">{p.name}</p>
-                              <p className="text-[11px] text-[#666666]">{p.category} • ~{p.priceEur} € • {p.qcImages?.length || 0} QC</p>
+                {filteredProducts.length === 0 ? (
+                  <div className="bg-white border border-[#E2E2E6] rounded-2xl p-12 text-center space-y-4">
+                    <Package className="w-12 h-12 text-[#666666] mx-auto" />
+                    <h3 className="text-lg font-bold">Aucun produit trouvé</h3>
+                    <p className="text-xs text-[#666666]">Essayez de modifier vos filtres ou ajoutez des articles depuis l'admin.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                    {filteredProducts.map((product) => {
+                      const isFav = favorites.includes(product.id);
+                      const qcCount = product.qcImages ? product.qcImages.length : 0;
+                      return (
+                        <div
+                          key={product.id}
+                          onClick={() => openProductDetail(product.id)}
+                          className="group bg-white border border-[#E2E2E6] rounded-lg overflow-hidden cursor-pointer transition-all duration-300 hover:-translate-y-1 hover:shadow-lg flex flex-col justify-between"
+                        >
+                          <div>
+                            <div className="relative aspect-[4/5] bg-[#EAEAEF] overflow-hidden">
+                              {product.promoImages?.[0] && (
+                                <img
+                                  src={product.promoImages[0]}
+                                  alt={product.name}
+                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                />
+                              )}
+                              <div className="absolute top-3 left-3 flex gap-1.5">
+                                <span className="bg-white/95 text-[#111111] text-[11px] font-bold uppercase px-2 py-1 rounded">
+                                  {product.category}
+                                </span>
+                                {qcCount > 0 && (
+                                  <span className="bg-[#111111] text-white text-[11px] font-bold uppercase px-2 py-1 rounded flex items-center gap-1">
+                                    <ShieldCheck className="w-3 h-3 text-emerald-400" /> {qcCount} QC
+                                  </span>
+                                )}
+                              </div>
+                              <button
+                                onClick={(e) => toggleFavorite(e, product.id)}
+                                className={`absolute top-3 right-3 w-9 h-9 rounded-full flex items-center justify-center border ${
+                                  isFav ? 'bg-[#111111] text-white border-[#111111]' : 'bg-white text-[#111111] border-[#E2E2E6]'
+                                }`}
+                              >
+                                <Heart className={`w-4 h-4 ${isFav ? 'fill-current' : ''}`} />
+                              </button>
+                            </div>
+                            <div className="p-4">
+                              <h3 className="font-bold text-[#111111] text-sm line-clamp-2 group-hover:underline">
+                                {product.name}
+                              </h3>
                             </div>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => {
-                                setEditingProduct(p);
-                                setProductForm({
-                                  name: p.name,
-                                  category: p.category,
-                                  priceEur: p.priceEur,
-                                  priceCny: p.priceCny,
-                                  description: p.description,
-                                  bbdbuyUrl: p.bbdbuyUrl,
-                                  promoImagesStr: p.promoImages?.join(', ') || '',
-                                  qcImagesStr: p.qcImages?.join(', ') || ''
-                                });
-                              }}
-                              className="p-2 bg-[#F4F4F6] rounded hover:bg-[#111111] hover:text-white"
-                            >
-                              <Edit3 className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => {
-                                if (confirm('Supprimer ce produit ?')) {
-                                  setProducts(products.filter(item => item.id !== p.id));
-                                  showToast('Produit supprimé');
-                                }
-                              }}
-                              className="p-2 bg-red-50 text-red-600 rounded hover:bg-red-600 hover:text-white"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                          <div className="px-4 pb-4 pt-1 flex items-center justify-between border-t border-[#F4F4F6]">
+                            <div>
+                              <span className="text-[11px] uppercase text-[#666666] block">Prix indicatif</span>
+                              <span className="text-base font-black text-[#111111]">
+                                ~{Number(product.priceEur).toFixed(2)} €
+                              </span>
+                            </div>
+                            <span className="w-8 h-8 rounded-md bg-[#F4F4F6] group-hover:bg-[#111111] group-hover:text-white flex items-center justify-center">
+                              <ArrowUpRight className="w-4 h-4" />
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ================= FICHE PRODUIT & QC ================= */}
+            {activeTab === 'product' && activeProduct && (
+              <div className="space-y-12 pb-16">
+                <button
+                  onClick={() => navigateTo('catalog')}
+                  className="text-xs font-bold uppercase tracking-widest text-[#666666] hover:text-[#111111] flex items-center gap-1.5"
+                >
+                  ← Retour au catalogue
+                </button>
+
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 bg-white border border-[#E2E2E6] rounded-2xl p-6 sm:p-10">
+                  <div className="lg:col-span-6 space-y-4">
+                    <div className="aspect-square bg-[#EAEAEF] rounded-xl overflow-hidden border border-[#E2E2E6]">
+                      {activeProduct.promoImages?.[0] && (
+                        <img
+                          src={activeProduct.promoImages[0]}
+                          alt={activeProduct.name}
+                          className="w-full h-full object-cover cursor-zoom-in"
+                          onClick={() => setLightboxImage(activeProduct.promoImages[0])}
+                        />
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="lg:col-span-6 space-y-6">
+                    <div className="flex items-center gap-2">
+                      <span className="bg-[#111111] text-white text-xs font-bold uppercase px-3 py-1 rounded">
+                        {activeProduct.category}
+                      </span>
+                      <span className="text-xs text-[#666666] font-medium">
+                        {activeProduct.views || 0} vues
+                      </span>
+                    </div>
+
+                    <h1 className="text-2xl sm:text-3xl font-black uppercase text-[#111111]">
+                      {activeProduct.name}
+                    </h1>
+
+                    <div className="bg-[#F4F4F6] p-4 rounded-xl border border-[#E2E2E6]">
+                      <span className="text-xs uppercase text-[#666666] block">Prix indicatif</span>
+                      <div className="flex items-baseline gap-3">
+                        <span className="text-3xl font-black text-[#111111]">
+                          ~{Number(activeProduct.priceEur).toFixed(2)} €
+                        </span>
+                        {activeProduct.priceCny > 0 && (
+                          <span className="text-sm font-bold text-[#666666]">
+                            (¥{activeProduct.priceCny})
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <p className="text-sm text-[#555555] leading-relaxed">
+                      {activeProduct.description}
+                    </p>
+
+                    <div className="pt-4 space-y-3">
+                      <a
+                        href={activeProduct.bbdbuyUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full py-4 bg-[#111111] text-white font-black text-sm uppercase tracking-widest rounded-xl hover:bg-[#2a2a2a] transition-colors flex items-center justify-center gap-2 shadow-lg"
+                      >
+                        Acheter maintenant sur BBDBuy
+                        <ExternalLink className="w-4 h-4" />
+                      </a>
+                    </div>
+                  </div>
+                </div>
+
+                {/* SECTION QUALITY CHECKS (QC) */}
+                <div className="bg-white border border-[#E2E2E6] rounded-2xl p-6 sm:p-10 space-y-6">
+                  <div className="flex items-center justify-between border-b border-[#E2E2E6] pb-4">
+                    <div className="flex items-center gap-3">
+                      <ShieldCheck className="w-6 h-6 text-emerald-600" />
+                      <div>
+                        <h2 className="text-lg font-black uppercase tracking-tight text-[#111111]">
+                          Quality Checks (QC)
+                        </h2>
+                        <p className="text-xs text-[#666666]">
+                          Photos réelles prises par l’entrepôt de l’agent (Vérifiées et certifiées)
+                        </p>
+                      </div>
+                    </div>
+                    <span className="bg-[#F4F4F6] px-3 py-1 rounded text-xs font-bold">
+                      {activeProduct.qcImages?.length || 0} Photos QC
+                    </span>
+                  </div>
+
+                  {!activeProduct.qcImages || activeProduct.qcImages.length === 0 ? (
+                    <p className="text-xs text-[#666666] italic py-4">Aucune photo QC ajoutée pour le moment.</p>
+                  ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                      {activeProduct.qcImages.map((img, idx) => (
+                        <div
+                          key={idx}
+                          onClick={() => setLightboxImage(img)}
+                          className="group relative aspect-square bg-[#EAEAEF] rounded-xl overflow-hidden border border-[#E2E2E6] cursor-zoom-in"
+                        >
+                          <img src={img} alt={`QC ${idx + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                            <ZoomIn className="w-6 h-6" />
                           </div>
                         </div>
                       ))}
                     </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* ================= ACTUALITÉS ================= */}
+            {activeTab === 'news' && (
+              <div className="space-y-8 pb-16">
+                <div className="bg-white p-6 rounded-2xl border border-[#E2E2E6]">
+                  <h1 className="text-2xl font-black uppercase tracking-tight text-[#111111]">
+                    Actualités & Guides
+                  </h1>
+                  <p className="text-xs text-[#666666] mt-1">
+                    Conseils pour débutants, informations sur BBDBuy et livraisons.
+                  </p>
+                </div>
+
+                {news.length === 0 ? (
+                  <div className="bg-white border border-[#E2E2E6] rounded-2xl p-12 text-center">
+                    <p className="text-xs text-[#666666]">Aucune actualité publiée pour le moment.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {news.map((item) => (
+                      <div
+                        key={item.id}
+                        onClick={() => setSelectedNewsArticle(item)}
+                        className="bg-white border border-[#E2E2E6] rounded-xl overflow-hidden cursor-pointer group flex flex-col justify-between hover:shadow-md transition-shadow"
+                      >
+                        <div>
+                          {item.image && (
+                            <div className="aspect-video bg-[#EAEAEF] overflow-hidden">
+                              <img src={item.image} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                            </div>
+                          )}
+                          <div className="p-5 space-y-2">
+                            <span className="text-[11px] font-bold bg-[#F4F4F6] px-2.5 py-1 rounded uppercase">
+                              {item.category}
+                            </span>
+                            <h3 className="font-bold text-[#111111] text-base group-hover:underline">
+                              {item.title}
+                            </h3>
+                            <p className="text-xs text-[#555555] line-clamp-2">
+                              {item.summary}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="px-5 pb-5 pt-2 border-t border-[#F4F4F6] text-[11px] text-[#666666] font-medium">
+                          {item.date}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
 
-                {/* Paramètres & Discord */}
-                {adminActiveTab === 'settings' && (
-                  <div className="bg-white border border-[#E2E2E6] rounded-2xl p-6 space-y-6">
-                    <h3 className="font-black uppercase text-sm">Configuration du Lien Discord (Assistance)</h3>
-                    <div className="space-y-4 max-w-xl">
-                      <div>
-                        <label className="block text-xs font-bold uppercase text-[#666666] mb-1">
-                          Lien d'invitation Discord officiel
-                        </label>
-                        <input
-                          type="url"
-                          value={discordUrl}
-                          onChange={(e) => setDiscordUrl(e.target.value)}
-                          className="w-full px-4 py-3 bg-[#F4F4F6] border border-[#E2E2E6] rounded-lg text-xs"
-                        />
-                      </div>
+                {selectedNewsArticle && (
+                  <div
+                    onClick={() => setSelectedNewsArticle(null)}
+                    className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
+                  >
+                    <div
+                      onClick={(e) => e.stopPropagation()}
+                      className="bg-white max-w-2xl w-full max-h-[90vh] overflow-y-auto rounded-2xl p-6 sm:p-8 space-y-4 relative"
+                    >
                       <button
-                        onClick={() => showToast('Lien Discord mis à jour avec succès')}
-                        className="px-6 py-3 bg-[#111111] text-white rounded-lg text-xs font-bold uppercase"
+                        onClick={() => setSelectedNewsArticle(null)}
+                        className="absolute top-4 right-4 p-2 rounded-full bg-[#F4F4F6]"
                       >
-                        Enregistrer
+                        <X className="w-5 h-5" />
                       </button>
+                      <span className="text-xs font-bold bg-[#111111] text-white px-3 py-1 rounded">
+                        {selectedNewsArticle.category}
+                      </span>
+                      <h2 className="text-xl font-black uppercase text-[#111111]">
+                        {selectedNewsArticle.title}
+                      </h2>
+                      <p className="text-xs text-[#666666]">{selectedNewsArticle.date}</p>
+                      <div className="text-sm text-[#333333] whitespace-pre-line leading-relaxed pt-2">
+                        {selectedNewsArticle.content}
+                      </div>
                     </div>
                   </div>
                 )}
               </div>
             )}
-          </div>
+
+            {/* ================= FAVORIS ================= */}
+            {activeTab === 'favorites' && (
+              <div className="space-y-8 pb-16">
+                <div className="bg-white p-6 rounded-2xl border border-[#E2E2E6]">
+                  <h1 className="text-2xl font-black uppercase tracking-tight text-[#111111]">
+                    Mes Favoris
+                  </h1>
+                  <p className="text-xs text-[#666666] mt-1">
+                    {favorites.length} articles sauvegardés
+                  </p>
+                </div>
+
+                {favorites.length === 0 ? (
+                  <div className="bg-white border border-[#E2E2E6] rounded-2xl p-12 text-center space-y-4">
+                    <Heart className="w-12 h-12 text-[#666666] mx-auto" />
+                    <h3 className="text-lg font-bold">Aucun favori pour l'instant</h3>
+                    <p className="text-xs text-[#666666]">Cliquez sur le cœur d'un produit pour l'ajouter ici.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                    {products
+                      .filter((p) => favorites.includes(p.id))
+                      .map((product) => (
+                        <div
+                          key={product.id}
+                          onClick={() => openProductDetail(product.id)}
+                          className="group bg-white border border-[#E2E2E6] rounded-lg overflow-hidden cursor-pointer hover:shadow-lg flex flex-col justify-between"
+                        >
+                          <div>
+                            <div className="relative aspect-[4/5] bg-[#EAEAEF]">
+                              {product.promoImages?.[0] && (
+                                <img src={product.promoImages[0]} alt={product.name} className="w-full h-full object-cover" />
+                              )}
+                              <button
+                                onClick={(e) => toggleFavorite(e, product.id)}
+                                className="absolute top-3 right-3 w-9 h-9 rounded-full bg-[#111111] text-white flex items-center justify-center"
+                              >
+                                <Heart className="w-4 h-4 fill-current" />
+                              </button>
+                            </div>
+                            <div className="p-4">
+                              <h3 className="font-bold text-sm line-clamp-2">{product.name}</h3>
+                            </div>
+                          </div>
+                          <div className="px-4 pb-4 pt-1 flex items-center justify-between border-t border-[#F4F4F6]">
+                            <span className="text-base font-black">~{Number(product.priceEur).toFixed(2)} €</span>
+                            <ArrowUpRight className="w-4 h-4" />
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ================= ESPACE ADMINISTRATEUR ================= */}
+            {activeTab === 'admin' && (
+              <div className="space-y-8 pb-16">
+                {!isAdminAuthenticated ? (
+                  <div className="max-w-md mx-auto bg-white border border-[#E2E2E6] rounded-2xl p-8 space-y-6 shadow-sm">
+                    <div className="text-center space-y-2">
+                      <div className="w-12 h-12 bg-[#111111] text-white rounded-xl flex items-center justify-center mx-auto">
+                        <Lock className="w-6 h-6" />
+                      </div>
+                      <h1 className="text-xl font-black uppercase">Administration BLACKBOX</h1>
+                      <p className="text-xs text-[#666666]">Entrez votre mot de passe administrateur</p>
+                    </div>
+
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        if (adminPasswordInput === 'Goundo77@') {
+                          setIsAdminAuthenticated(true);
+                          setAdminLoginError('');
+                          showToast('Connexion administrateur réussie');
+                        } else {
+                          setAdminLoginError('Mot de passe incorrect');
+                        }
+                      }}
+                      className="space-y-4"
+                    >
+                      <div>
+                        <input
+                          type="password"
+                          value={adminPasswordInput}
+                          onChange={(e) => setAdminPasswordInput(e.target.value)}
+                          placeholder="Mot de passe"
+                          autoFocus
+                          className="w-full px-4 py-3 bg-[#F4F4F6] border border-[#E2E2E6] rounded-lg text-sm focus:outline-none focus:border-[#111111]"
+                        />
+                        {adminLoginError && (
+                          <p className="text-xs text-red-600 mt-1">{adminLoginError}</p>
+                        )}
+                      </div>
+                      <button
+                        type="submit"
+                        className="w-full py-3 bg-[#111111] text-white font-bold text-xs uppercase tracking-widest rounded-lg hover:bg-[#2a2a2a]"
+                      >
+                        Se connecter
+                      </button>
+                    </form>
+                  </div>
+                ) : (
+                  <div className="space-y-8">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-2xl border border-[#E2E2E6]">
+                      <div>
+                        <h1 className="text-2xl font-black uppercase">Tableau de Bord Admin (En Direct)</h1>
+                        <p className="text-xs text-emerald-600 font-bold">
+                          ● Synchronisé avec Supabase — Visible par tous les visiteurs en temps réel
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => setIsAdminAuthenticated(false)}
+                        className="px-4 py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg text-xs font-bold uppercase"
+                      >
+                        Déconnexion
+                      </button>
+                    </div>
+
+                    {/* Onglets Admin */}
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        onClick={() => setAdminActiveTab('products')}
+                        className={`px-4 py-2 rounded-lg text-xs font-bold uppercase ${
+                          adminActiveTab === 'products' ? 'bg-[#111111] text-white' : 'bg-white border border-[#E2E2E6]'
+                        }`}
+                      >
+                        Produits ({products.length})
+                      </button>
+                      <button
+                        onClick={() => setAdminActiveTab('news')}
+                        className={`px-4 py-2 rounded-lg text-xs font-bold uppercase ${
+                          adminActiveTab === 'news' ? 'bg-[#111111] text-white' : 'bg-white border border-[#E2E2E6]'
+                        }`}
+                      >
+                        Actualités ({news.length})
+                      </button>
+                      <button
+                        onClick={() => setAdminActiveTab('settings')}
+                        className={`px-4 py-2 rounded-lg text-xs font-bold uppercase ${
+                          adminActiveTab === 'settings' ? 'bg-[#111111] text-white' : 'bg-white border border-[#E2E2E6]'
+                        }`}
+                      >
+                        Paramètres & Discord
+                      </button>
+                    </div>
+
+                    {/* Gestion Produits */}
+                    {adminActiveTab === 'products' && (
+                      <div className="bg-white border border-[#E2E2E6] rounded-2xl p-6 space-y-6">
+                        <div className="flex justify-between items-center">
+                          <h3 className="font-black uppercase text-sm">Liste des Produits en Ligne</h3>
+                          <button
+                            onClick={() => {
+                              setEditingProduct(null);
+                              setProductForm({
+                                name: '',
+                                category: 'Vêtements',
+                                priceEur: '',
+                                priceCny: '',
+                                description: '',
+                                bbdbuyUrl: '',
+                                promoImagesStr: '',
+                                qcImagesStr: ''
+                              });
+                            }}
+                            className="px-4 py-2 bg-[#111111] text-white rounded-lg text-xs font-bold uppercase flex items-center gap-1.5"
+                          >
+                            <Plus className="w-4 h-4" /> Ajouter un produit
+                          </button>
+                        </div>
+
+                        {editingProduct !== undefined && (
+                          <form
+                            onSubmit={handleSaveProduct}
+                            className="bg-[#F4F4F6] p-6 rounded-xl border border-[#E2E2E6] space-y-4"
+                          >
+                            <h4 className="font-bold text-xs uppercase text-[#111111]">
+                              {editingProduct ? 'Modifier le produit' : 'Nouveau produit'}
+                            </h4>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                              <input
+                                type="text"
+                                placeholder="Nom du produit"
+                                value={productForm.name}
+                                onChange={(e) => setProductForm({ ...productForm, name: e.target.value })}
+                                required
+                                className="w-full px-3 py-2 bg-white border border-[#E2E2E6] rounded-lg text-xs"
+                              />
+                              <select
+                                value={productForm.category}
+                                onChange={(e) => setProductForm({ ...productForm, category: e.target.value })}
+                                className="w-full px-3 py-2 bg-white border border-[#E2E2E6] rounded-lg text-xs"
+                              >
+                                {CATEGORIES.map((c) => (
+                                  <option key={c} value={c}>
+                                    {c}
+                                  </option>
+                                ))}
+                              </select>
+                              <input
+                                type="number"
+                                step="0.01"
+                                placeholder="Prix EUR"
+                                value={productForm.priceEur}
+                                onChange={(e) => setProductForm({ ...productForm, priceEur: e.target.value })}
+                                required
+                                className="w-full px-3 py-2 bg-white border border-[#E2E2E6] rounded-lg text-xs"
+                              />
+                              <input
+                                type="number"
+                                placeholder="Prix CNY"
+                                value={productForm.priceCny}
+                                onChange={(e) => setProductForm({ ...productForm, priceCny: e.target.value })}
+                                className="w-full px-3 py-2 bg-white border border-[#E2E2E6] rounded-lg text-xs"
+                              />
+                            </div>
+                            <textarea
+                              placeholder="Description détaillée"
+                              value={productForm.description}
+                              onChange={(e) => setProductForm({ ...productForm, description: e.target.value })}
+                              rows={3}
+                              className="w-full px-3 py-2 bg-white border border-[#E2E2E6] rounded-lg text-xs"
+                            />
+                            <input
+                              type="url"
+                              placeholder="Lien BBDBuy"
+                              value={productForm.bbdbuyUrl}
+                              onChange={(e) => setProductForm({ ...productForm, bbdbuyUrl: e.target.value })}
+                              required
+                              className="w-full px-3 py-2 bg-white border border-[#E2E2E6] rounded-lg text-xs"
+                            />
+                            <input
+                              type="text"
+                              placeholder="URLs photos Promo (séparées par des virgules)"
+                              value={productForm.promoImagesStr}
+                              onChange={(e) => setProductForm({ ...productForm, promoImagesStr: e.target.value })}
+                              className="w-full px-3 py-2 bg-white border border-[#E2E2E6] rounded-lg text-xs"
+                            />
+                            <input
+                              type="text"
+                              placeholder="URLs photos QC (séparées par des virgules)"
+                              value={productForm.qcImagesStr}
+                              onChange={(e) => setProductForm({ ...productForm, qcImagesStr: e.target.value })}
+                              className="w-full px-3 py-2 bg-white border border-[#E2E2E6] rounded-lg text-xs"
+                            />
+                            <div className="flex gap-2">
+                              <button
+                                type="submit"
+                                disabled={saving}
+                                className="px-5 py-2.5 bg-[#111111] text-white rounded-lg text-xs font-bold uppercase disabled:opacity-50"
+                              >
+                                {saving ? 'Enregistrement...' : 'Publier en direct'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setEditingProduct(undefined)}
+                                className="px-5 py-2.5 bg-white border border-[#E2E2E6] rounded-lg text-xs font-bold uppercase"
+                              >
+                                Annuler
+                              </button>
+                            </div>
+                          </form>
+                        )}
+
+                        <div className="divide-y divide-[#E2E2E6]">
+                          {products.map((p) => (
+                            <div key={p.id} className="py-3 flex items-center justify-between gap-4">
+                              <div className="flex items-center gap-3">
+                                {p.promoImages?.[0] && (
+                                  <img src={p.promoImages[0]} alt="" className="w-12 h-12 object-cover rounded-lg border" />
+                                )}
+                                <div>
+                                  <p className="font-bold text-xs line-clamp-1">{p.name}</p>
+                                  <p className="text-[11px] text-[#666666]">
+                                    {p.category} • ~{p.priceEur} € • {p.qcImages?.length || 0} QC
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => {
+                                    setEditingProduct(p);
+                                    setProductForm({
+                                      name: p.name,
+                                      category: p.category,
+                                      priceEur: p.priceEur,
+                                      priceCny: p.priceCny,
+                                      description: p.description,
+                                      bbdbuyUrl: p.bbdbuyUrl,
+                                      promoImagesStr: p.promoImages?.join(', ') || '',
+                                      qcImagesStr: p.qcImages?.join(', ') || ''
+                                    });
+                                  }}
+                                  className="p-2 bg-[#F4F4F6] rounded hover:bg-[#111111] hover:text-white"
+                                >
+                                  <Edit3 className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteProduct(p.id)}
+                                  className="p-2 bg-red-50 text-red-600 rounded hover:bg-red-600 hover:text-white"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Gestion Actualités Admin */}
+                    {adminActiveTab === 'news' && (
+                      <div className="bg-white border border-[#E2E2E6] rounded-2xl p-6 space-y-6">
+                        <div className="flex justify-between items-center">
+                          <h3 className="font-black uppercase text-sm">Gestion des Actualités & Guides</h3>
+                          <button
+                            onClick={() => {
+                              setEditingNews(null);
+                              setNewsForm({
+                                title: '',
+                                category: 'Guide BBDBuy',
+                                date: new Date().toLocaleDateString('fr-FR', {
+                                  day: 'numeric',
+                                  month: 'long',
+                                  year: 'numeric'
+                                }),
+                                image: '',
+                                summary: '',
+                                content: ''
+                              });
+                            }}
+                            className="px-4 py-2 bg-[#111111] text-white rounded-lg text-xs font-bold uppercase flex items-center gap-1.5"
+                          >
+                            <Plus className="w-4 h-4" /> Ajouter une actualité
+                          </button>
+                        </div>
+
+                        {editingNews !== undefined && (
+                          <form
+                            onSubmit={handleSaveNews}
+                            className="bg-[#F4F4F6] p-6 rounded-xl border border-[#E2E2E6] space-y-4"
+                          >
+                            <h4 className="font-bold text-xs uppercase text-[#111111]">
+                              {editingNews ? "Modifier l'actualité" : 'Nouvelle actualité'}
+                            </h4>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                              <input
+                                type="text"
+                                placeholder="Titre de l'article"
+                                value={newsForm.title}
+                                onChange={(e) => setNewsForm({ ...newsForm, title: e.target.value })}
+                                required
+                                className="w-full px-3 py-2 bg-white border border-[#E2E2E6] rounded-lg text-xs"
+                              />
+                              <input
+                                type="text"
+                                placeholder="Catégorie (ex: Guide BBDBuy, Annonce)"
+                                value={newsForm.category}
+                                onChange={(e) => setNewsForm({ ...newsForm, category: e.target.value })}
+                                required
+                                className="w-full px-3 py-2 bg-white border border-[#E2E2E6] rounded-lg text-xs"
+                              />
+                            </div>
+                            <input
+                              type="text"
+                              placeholder="URL de l'image d'illustration"
+                              value={newsForm.image}
+                              onChange={(e) => setNewsForm({ ...newsForm, image: e.target.value })}
+                              className="w-full px-3 py-2 bg-white border border-[#E2E2E6] rounded-lg text-xs"
+                            />
+                            <textarea
+                              placeholder="Résumé court"
+                              value={newsForm.summary}
+                              onChange={(e) => setNewsForm({ ...newsForm, summary: e.target.value })}
+                              rows={2}
+                              className="w-full px-3 py-2 bg-white border border-[#E2E2E6] rounded-lg text-xs"
+                            />
+                            <textarea
+                              placeholder="Contenu complet de l'article"
+                              value={newsForm.content}
+                              onChange={(e) => setNewsForm({ ...newsForm, content: e.target.value })}
+                              rows={4}
+                              className="w-full px-3 py-2 bg-white border border-[#E2E2E6] rounded-lg text-xs"
+                            />
+                            <div className="flex gap-2">
+                              <button
+                                type="submit"
+                                disabled={saving}
+                                className="px-5 py-2.5 bg-[#111111] text-white rounded-lg text-xs font-bold uppercase disabled:opacity-50"
+                              >
+                                {saving ? 'Enregistrement...' : 'Publier en direct'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setEditingNews(undefined)}
+                                className="px-5 py-2.5 bg-white border border-[#E2E2E6] rounded-lg text-xs font-bold uppercase"
+                              >
+                                Annuler
+                              </button>
+                            </div>
+                          </form>
+                        )}
+
+                        <div className="divide-y divide-[#E2E2E6]">
+                          {news.map((item) => (
+                            <div key={item.id} className="py-3 flex items-center justify-between gap-4">
+                              <div>
+                                <p className="font-bold text-xs">{item.title}</p>
+                                <p className="text-[11px] text-[#666666]">
+                                  {item.category} • {item.date}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => {
+                                    setEditingNews(item);
+                                    setNewsForm({
+                                      title: item.title,
+                                      category: item.category,
+                                      date: item.date,
+                                      image: item.image || '',
+                                      summary: item.summary || '',
+                                      content: item.content || ''
+                                    });
+                                  }}
+                                  className="p-2 bg-[#F4F4F6] rounded hover:bg-[#111111] hover:text-white"
+                                >
+                                  <Edit3 className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteNews(item.id)}
+                                  className="p-2 bg-red-50 text-red-600 rounded hover:bg-red-600 hover:text-white"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Paramètres & Discord */}
+                    {adminActiveTab === 'settings' && (
+                      <div className="bg-white border border-[#E2E2E6] rounded-2xl p-6 space-y-6">
+                        <h3 className="font-black uppercase text-sm">Configuration du Lien Discord (Assistance)</h3>
+                        <div className="space-y-4 max-w-xl">
+                          <div>
+                            <label className="block text-xs font-bold uppercase text-[#666666] mb-1">
+                              Lien d'invitation Discord officiel
+                            </label>
+                            <input
+                              type="url"
+                              value={discordUrl}
+                              onChange={(e) => setDiscordUrl(e.target.value)}
+                              className="w-full px-4 py-3 bg-[#F4F4F6] border border-[#E2E2E6] rounded-lg text-xs"
+                            />
+                          </div>
+                          <button
+                            onClick={handleSaveDiscord}
+                            disabled={saving}
+                            className="px-6 py-3 bg-[#111111] text-white rounded-lg text-xs font-bold uppercase disabled:opacity-50"
+                          >
+                            {saving ? 'Sauvegarde...' : 'Enregistrer pour tout le monde'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </>
         )}
       </main>
 
