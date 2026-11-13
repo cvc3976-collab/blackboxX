@@ -179,11 +179,6 @@ export default function App() {
     return localStorage.getItem('blackbox_discord_url_v1') || DEFAULT_DISCORD_URL;
   });
 
-  const [visitorCount, setVisitorCount] = useState(() => {
-    const saved = parseInt(localStorage.getItem('blackbox_visitors_v1') || '3842', 10);
-    return saved + 1;
-  });
-
   useEffect(() => {
     localStorage.setItem('blackbox_products_v1', JSON.stringify(products));
   }, [products]);
@@ -199,10 +194,6 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('blackbox_discord_url_v1', discordUrl);
   }, [discordUrl]);
-
-  useEffect(() => {
-    localStorage.setItem('blackbox_visitors_v1', String(visitorCount));
-  }, [visitorCount]);
 
   const [selectedProductId, setSelectedProductId] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -224,7 +215,7 @@ export default function App() {
   const [adminActiveTab, setAdminActiveTab] = useState('products');
 
   // Modal d'ajout / édition de produit
-  const [editingProduct, setEditingProduct] = useState(null);
+  const [editingProduct, setEditingProduct] = useState(undefined);
   const [productForm, setProductForm] = useState({
     name: '',
     category: 'Vêtements',
@@ -234,6 +225,17 @@ export default function App() {
     bbdbuyUrl: '',
     promoImagesStr: '',
     qcImagesStr: ''
+  });
+
+  // Modal d'ajout / édition d'actualité
+  const [editingNews, setEditingNews] = useState(undefined);
+  const [newsForm, setNewsForm] = useState({
+    title: '',
+    category: 'Guide BBDBuy',
+    date: '13 Novembre 2026',
+    image: '',
+    summary: '',
+    content: ''
   });
 
   const openProductDetail = (productId) => {
@@ -294,9 +296,6 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // ==========================================================================
-  // RENDU : HEADER & NAVIGATION
-  // ==========================================================================
   return (
     <div className="min-h-screen bg-[#F4F4F6] text-[#111111] flex flex-col font-sans">
       {/* Toast Notification */}
@@ -933,7 +932,7 @@ export default function App() {
                       setAdminLoginError('');
                       showToast('Connexion administrateur réussie');
                     } else {
-                      setAdminLoginError('Mot de passe incorrect (par défaut: admin123)');
+                      setAdminLoginError('Mot de passe incorrect');
                     }
                   }}
                   className="space-y-4"
@@ -943,7 +942,7 @@ export default function App() {
                       type="password"
                       value={adminPasswordInput}
                       onChange={(e) => setAdminPasswordInput(e.target.value)}
-                      placeholder="Mot de passe (admin123)"
+                      placeholder="Mot de passe"
                       autoFocus
                       className="w-full px-4 py-3 bg-[#F4F4F6] border border-[#E2E2E6] rounded-lg text-sm focus:outline-none focus:border-[#111111]"
                     />
@@ -964,7 +963,7 @@ export default function App() {
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-2xl border border-[#E2E2E6]">
                   <div>
                     <h1 className="text-2xl font-black uppercase">Tableau de Bord Admin</h1>
-                    <p className="text-xs text-[#666666]">Gestion complète des produits, QC et paramètres</p>
+                    <p className="text-xs text-[#666666]">Gestion complète des produits, QC et actualités</p>
                   </div>
                   <button
                     onClick={() => setIsAdminAuthenticated(false)}
@@ -983,6 +982,14 @@ export default function App() {
                     }`}
                   >
                     Produits ({products.length})
+                  </button>
+                  <button
+                    onClick={() => setAdminActiveTab('news')}
+                    className={`px-4 py-2 rounded-lg text-xs font-bold uppercase ${
+                      adminActiveTab === 'news' ? 'bg-[#111111] text-white' : 'bg-white border border-[#E2E2E6]'
+                    }`}
+                  >
+                    Actualités ({news.length})
                   </button>
                   <button
                     onClick={() => setAdminActiveTab('settings')}
@@ -1019,8 +1026,7 @@ export default function App() {
                       </button>
                     </div>
 
-                    {/* Formulaire Ajout / Édition */}
-                    {(editingProduct !== undefined) && (
+                    {editingProduct !== undefined && (
                       <form
                         onSubmit={(e) => {
                           e.preventDefault();
@@ -1071,7 +1077,7 @@ export default function App() {
                           <input
                             type="number"
                             step="0.01"
-                            placeholder="Prix EUR (~34.50)"
+                            placeholder="Prix EUR"
                             value={productForm.priceEur}
                             onChange={(e) => setProductForm({ ...productForm, priceEur: e.target.value })}
                             required
@@ -1079,7 +1085,7 @@ export default function App() {
                           />
                           <input
                             type="number"
-                            placeholder="Prix CNY (¥265)"
+                            placeholder="Prix CNY"
                             value={productForm.priceCny}
                             onChange={(e) => setProductForm({ ...productForm, priceCny: e.target.value })}
                             className="w-full px-3 py-2 bg-white border border-[#E2E2E6] rounded-lg text-xs"
@@ -1132,7 +1138,6 @@ export default function App() {
                       </form>
                     )}
 
-                    {/* Tableau produits */}
                     <div className="divide-y divide-[#E2E2E6]">
                       {products.map((p) => (
                         <div key={p.id} className="py-3 flex items-center justify-between gap-4">
@@ -1167,6 +1172,156 @@ export default function App() {
                                 if (confirm('Supprimer ce produit ?')) {
                                   setProducts(products.filter(item => item.id !== p.id));
                                   showToast('Produit supprimé');
+                                }
+                              }}
+                              className="p-2 bg-red-50 text-red-600 rounded hover:bg-red-600 hover:text-white"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Gestion Actualités Admin */}
+                {adminActiveTab === 'news' && (
+                  <div className="bg-white border border-[#E2E2E6] rounded-2xl p-6 space-y-6">
+                    <div className="flex justify-between items-center">
+                      <h3 className="font-black uppercase text-sm">Gestion des Actualités & Guides</h3>
+                      <button
+                        onClick={() => {
+                          setEditingNews(null);
+                          setNewsForm({
+                            title: '',
+                            category: 'Guide BBDBuy',
+                            date: '13 Novembre 2026',
+                            image: '',
+                            summary: '',
+                            content: ''
+                          });
+                        }}
+                        className="px-4 py-2 bg-[#111111] text-white rounded-lg text-xs font-bold uppercase flex items-center gap-1.5"
+                      >
+                        <Plus className="w-4 h-4" /> Ajouter une actualité
+                      </button>
+                    </div>
+
+                    {editingNews !== undefined && (
+                      <form
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          const newArt = {
+                            id: editingNews ? editingNews.id : `news-${Date.now()}`,
+                            title: newsForm.title,
+                            category: newsForm.category,
+                            date: newsForm.date,
+                            image: newsForm.image,
+                            summary: newsForm.summary,
+                            content: newsForm.content
+                          };
+
+                          if (editingNews) {
+                            setNews(news.map(n => n.id === editingNews.id ? newArt : n));
+                            showToast('Actualité mise à jour');
+                          } else {
+                            setNews([newArt, ...news]);
+                            showToast('Actualité ajoutée');
+                          }
+                          setEditingNews(undefined);
+                        }}
+                        className="bg-[#F4F4F6] p-6 rounded-xl border border-[#E2E2E6] space-y-4"
+                      >
+                        <h4 className="font-bold text-xs uppercase text-[#111111]">
+                          {editingNews ? "Modifier l'actualité" : 'Nouvelle actualité'}
+                        </h4>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <input
+                            type="text"
+                            placeholder="Titre de l'article"
+                            value={newsForm.title}
+                            onChange={(e) => setNewsForm({ ...newsForm, title: e.target.value })}
+                            required
+                            className="w-full px-3 py-2 bg-white border border-[#E2E2E6] rounded-lg text-xs"
+                          />
+                          <input
+                            type="text"
+                            placeholder="Catégorie (ex: Guide BBDBuy, Annonce)"
+                            value={newsForm.category}
+                            onChange={(e) => setNewsForm({ ...newsForm, category: e.target.value })}
+                            required
+                            className="w-full px-3 py-2 bg-white border border-[#E2E2E6] rounded-lg text-xs"
+                          />
+                        </div>
+                        <input
+                          type="text"
+                          placeholder="URL de l'image d'illustration"
+                          value={newsForm.image}
+                          onChange={(e) => setNewsForm({ ...newsForm, image: e.target.value })}
+                          className="w-full px-3 py-2 bg-white border border-[#E2E2E6] rounded-lg text-xs"
+                        />
+                        <textarea
+                          placeholder="Résumé court"
+                          value={newsForm.summary}
+                          onChange={(e) => setNewsForm({ ...newsForm, summary: e.target.value })}
+                          rows={2}
+                          className="w-full px-3 py-2 bg-white border border-[#E2E2E6] rounded-lg text-xs"
+                        />
+                        <textarea
+                          placeholder="Contenu complet de l'article"
+                          value={newsForm.content}
+                          onChange={(e) => setNewsForm({ ...newsForm, content: e.target.value })}
+                          rows={4}
+                          className="w-full px-3 py-2 bg-white border border-[#E2E2E6] rounded-lg text-xs"
+                        />
+                        <div className="flex gap-2">
+                          <button
+                            type="submit"
+                            className="px-5 py-2.5 bg-[#111111] text-white rounded-lg text-xs font-bold uppercase"
+                          >
+                            Enregistrer
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingNews(undefined)}
+                            className="px-5 py-2.5 bg-white border border-[#E2E2E6] rounded-lg text-xs font-bold uppercase"
+                          >
+                            Annuler
+                          </button>
+                        </div>
+                      </form>
+                    )}
+
+                    <div className="divide-y divide-[#E2E2E6]">
+                      {news.map((item) => (
+                        <div key={item.id} className="py-3 flex items-center justify-between gap-4">
+                          <div>
+                            <p className="font-bold text-xs">{item.title}</p>
+                            <p className="text-[11px] text-[#666666]">{item.category} • {item.date}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => {
+                                setEditingNews(item);
+                                setNewsForm({
+                                  title: item.title,
+                                  category: item.category,
+                                  date: item.date,
+                                  image: item.image || '',
+                                  summary: item.summary || '',
+                                  content: item.content || ''
+                                });
+                              }}
+                              className="p-2 bg-[#F4F4F6] rounded hover:bg-[#111111] hover:text-white"
+                            >
+                              <Edit3 className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => {
+                                if (confirm('Supprimer cette actualité ?')) {
+                                  setNews(news.filter(n => n.id !== item.id));
+                                  showToast('Actualité supprimée');
                                 }
                               }}
                               className="p-2 bg-red-50 text-red-600 rounded hover:bg-red-600 hover:text-white"
